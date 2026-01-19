@@ -1,0 +1,29 @@
+[project]
+name = "rtls-stream-visualizer"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Maxim Drugov"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+packages = [{ include = "testing_udp" }, { include = "core" }]
+dependencies = [
+    "black (>=26.1.0,<27.0.0)",
+    "asyncio (>=4.0.0,<5.0.0)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "jsonschema (>=4.26.0,<5.0.0)"
+]
+
+[dependency-groups]
+dev = [
+    "black (>=26.1.0,<27.0.0)"
+]
+
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
