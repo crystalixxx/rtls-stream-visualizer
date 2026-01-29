@@ -19,4 +19,3 @@ def setup_logging(level: int = logging.INFO) -> None:
     handler.setFormatter(formatter)
 
     root_logger.addHandler(handler)
-
