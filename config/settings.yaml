@@ -1,0 +1,8 @@
+validation:
+  schema_path: "config/schema.json"
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+

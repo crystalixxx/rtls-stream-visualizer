@@ -17,13 +17,15 @@ class ValidationError:
 
 class Validator:
     def __init__(self, schema_path: str):
-        with open(schema_path, 'r') as file:
+        with open(schema_path, "r") as file:
             self.schema = json.load(file)
 
         self.validator = Draft202012Validator(self.schema)
         logger.debug("Validator initialized with schema: %s", schema_path)
 
-    def _get_validated_object(self, line: str, line_no: int) -> Tuple[Optional[Any], List[ValidationError]]:
+    def _get_validated_object(
+        self, line: str, line_no: int
+    ) -> Tuple[Optional[Any], List[ValidationError]]:
         try:
             obj = json.loads(line)
             logger.debug("Validated object: %s", obj)
@@ -39,11 +41,13 @@ class Validator:
 
         return None if len(errors) > 0 else obj, errors
 
-    def get_validated_objects_from_file(self, file_path: str) -> Tuple[List[Any], List[ValidationError]]:
+    def get_validated_objects_from_file(
+        self, file_path: str
+    ) -> Tuple[List[Any], List[ValidationError]]:
         all_errors: List[ValidationError] = []
         all_objects: List[Any] = []
 
-        with open(file_path, 'r', encoding='utf-8') as file:
+        with open(file_path, "r", encoding="utf-8") as file:
             for line_no, line in enumerate(file, start=1):
                 logger.debug("Processing line: %s", line)
 
