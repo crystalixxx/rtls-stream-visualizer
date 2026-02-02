@@ -2,10 +2,13 @@ import json
 import logging
 import socket
 import threading
-from pathlib import Path
-from typing import List
-
 import pytest
+
+from collections import defaultdict
+from pathlib import Path
+from typing import List, Dict
+
+from core.broker.interface import BrockerPublisher
 
 
 def pytest_configure(config):
@@ -46,11 +49,6 @@ def static_file(request):
         )
 
     return get_path
-
-
-# =============================================================================
-# UDP Test Utilities
-# =============================================================================
 
 
 class UdpTestServer:
@@ -102,6 +100,28 @@ class UdpTestServer:
 
     def clear(self) -> None:
         self.messages.clear()
+
+
+class DoomyPublisher(BrockerPublisher):
+    """
+    Simple brocker publisher for testing UDP Server
+
+    Usage:
+        publisher = DoomyPublisher()
+        udp_server = UdpServer(..., publisher, ...)
+        udp_server.serve_forever()
+        ....
+        assert expected_messages == publisher.get_messages()
+    """
+
+    def __init__(self):
+        self._messages: Dict[str, List] = defaultdict(list)
+
+    def publish(self, topic, message, headers=None):
+        self._messages[topic].append((message, headers))
+
+    def get_messages(self):
+        return self._messages
 
 
 @pytest.fixture

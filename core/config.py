@@ -30,6 +30,7 @@ class UdpServerConfig:
     port: int
     topic: Optional[str]
 
+
 @dataclass(frozen=True)
 class AppConfig:
     validation: ValidationConfig
@@ -62,7 +63,9 @@ def _get_or_use_default(config: Dict[str, Any], path: List[str], default: Any) -
         cur = cur[key]
 
     if not isinstance(cur, type(default)):
-        raise TypeError(f"Wrong type at {'.'.join(path)}: expected {type(default).__name__}, got {type(cur).__name__}")
+        raise TypeError(
+            f"Wrong type at {'.'.join(path)}: expected {type(default).__name__}, got {type(cur).__name__}"
+        )
 
     return cast(T, cur)
 
@@ -94,10 +97,14 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
     udp_server = UdpServerConfig(
         ip=raw_config["udp_server"]["ip"],
         port=raw_config["udp_server"]["port"],
-        topic=_get_or_use_default(raw_config, ["udp_server", "port"], "rtls.events") # TODO: Invent way to store default values
+        topic=_get_or_use_default(
+            raw_config, ["udp_server", "topic"], "rtls.events"
+        ),  # TODO: Invent way to store default values
     )
 
-    _config = AppConfig(validation=validation_config, logging=logging_config, udp_server=udp_server)
+    _config = AppConfig(
+        validation=validation_config, logging=logging_config, udp_server=udp_server
+    )
 
     logger.info("Configuration loaded successfully")
 
