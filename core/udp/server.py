@@ -4,6 +4,7 @@ import socket
 from collections.abc import Callable
 
 from core.broker.interface import BrockerPublisher
+from core.validate import Validator
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class UdpServer:
         publisher: BrockerPublisher,
         topic: str,
         max_datagram_bytes: int = 64 * 1024,
-        parse_json: bool = True,
+        validator: Validator | None = None,
         on_decode_error: Callable[[bytes, Exception], None] | None = None,
     ):
         self.ip = ip
@@ -24,7 +25,7 @@ class UdpServer:
         self.publisher = publisher
         self.topic = topic
         self.max_datagram_bytes = max_datagram_bytes
-        self.parse_json = parse_json
+        self.validator = validator
         self.on_decode_error = on_decode_error
 
         logger.info(f"Creating UDP server {self.ip}:{self.port}")
@@ -41,14 +42,25 @@ class UdpServer:
 
             try:
                 message = data
-
-                if self.parse_json:
-                    obj = json.loads(data.decode("utf-8"))
-                    message = json.dumps(
-                        obj, ensure_ascii=False, separators=(",", ":")
-                    ).encode("utf-8")
-
                 headers = {"source_ip": addr[0], "source_port": str(addr[1])}
+
+                decoded = data.decode("utf-8")
+                if self.validator is not None:
+                    validated, errors = self.validator.get_validated_object(
+                        decoded, line_no=1
+                    )
+
+                    if validated is None:
+                        raise ValueError(f"Validation failed: {errors}")
+
+                    obj = validated.data
+                    headers["origin"] = validated.origin
+                else:
+                    obj = json.loads(decoded)
+
+                message = json.dumps(
+                    obj, ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
 
                 logger.info(
                     "Sending into %s message_len=%s message_type=%s headers=%s",

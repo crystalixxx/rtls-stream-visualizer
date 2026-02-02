@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "devid": {
+      "type": "string",
+      "description": "Device ID in uppercase hex (example: \"01DD4E\").",
+      "pattern": "^[0-9A-F]+$",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "seq": {
+      "type": "integer",
+      "description": "Sequence number (cyclic).",
+      "minimum": 0,
+      "maximum": 65535
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "Timestamp in 'YYYY-MM-DD HH:mm:ss.SSS' (as in example).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}$"
+    },
+    "samples": {
+      "type": "array",
+      "description": "Ranging samples.",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "aid": {
+            "type": "string",
+            "description": "Anchor ID in uppercase hex (example: \"01B678\").",
+            "pattern": "^[0-9A-F]+$",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "tof": {
+            "type": "number",
+            "description": "Time-of-flight value (as provided by device)."
+          }
+        },
+        "required": ["aid", "tof"]
+      }
+    },
+    "position": {
+      "type": "object",
+      "description": "Calculated position.",
+      "additionalProperties": false,
+      "properties": {
+        "rgn": {
+          "description": "Region/area identifier. Seen as integer in JSON example; protocol docs may describe area name/id (RNGID).",
+          "oneOf": [
+            { "type": "integer" },
+            { "type": "string" }
+          ]
+        },
+        "x": { "type": "number", "description": "X coordinate." },
+        "y": { "type": "number", "description": "Y coordinate." },
+        "z": { "type": "number", "description": "Z coordinate." }
+      },
+      "required": ["rgn", "x", "y", "z"]
+    }
+  },
+  "required": ["devid", "seq", "timestamp", "samples", "position"]
+}

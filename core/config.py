@@ -14,8 +14,15 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "settings.yaml"
 
 
 @dataclass(frozen=True)
-class ValidationConfig:
+class ValidationItem:
+    name: str
+    origin: str
     schema_path: Path
+
+
+@dataclass(frozen=True)
+class ValidationConfig:
+    schemas: List[ValidationItem]
 
 
 @dataclass(frozen=True)
@@ -70,14 +77,7 @@ def _get_or_use_default(config: Dict[str, Any], path: List[str], default: Any) -
     return cast(T, cur)
 
 
-def load_config(config_path: Optional[Path] = None) -> AppConfig:
-    global _config
-
-    if _config is not None:
-        return _config
-
-    path = config_path or DEFAULT_CONFIG_PATH
-
+def _load_raw_config(path: Path) -> Dict[str, Any]:
     logger.debug("Loading configuration from: %s", path)
 
     with open(path, "r", encoding="utf-8") as file:
@@ -86,24 +86,63 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
     if not isinstance(raw_config, dict):
         raise TypeError("Config root must be a mapping (dict)")
 
-    validation_config = ValidationConfig(
-        schema_path=_resolve_path(raw_config["validation"]["schema_path"])
-    )
+    return raw_config
 
-    logging_config = LoggingConfig(
+
+def _build_validation_config(raw_config: Dict[str, Any]) -> ValidationConfig:
+    schemas = _get_or_use_default(raw_config, ["validation", "schemas"], [])
+    validation_items: list[ValidationItem] = []
+
+    for schema in schemas:
+        if not isinstance(schema, Mapping):
+            raise TypeError("Each validation schema must be a mapping (dict)")
+
+        schema_path = schema.get("schema_path")
+        if schema_path is None:
+            raise KeyError("validation.schemas item must include 'schema_path'")
+
+        validation_items.append(
+            ValidationItem(
+                name=schema["name"],
+                origin=schema["origin"],
+                schema_path=_resolve_path(schema_path),
+            )
+        )
+
+    return ValidationConfig(schemas=validation_items)
+
+
+def _build_logging_config(raw_config: Dict[str, Any]) -> LoggingConfig:
+    return LoggingConfig(
         level=raw_config["logging"]["level"], format=raw_config["logging"]["format"]
     )
 
-    udp_server = UdpServerConfig(
+
+def _build_udp_server_config(raw_config: Dict[str, Any]) -> UdpServerConfig:
+    return UdpServerConfig(
         ip=raw_config["udp_server"]["ip"],
         port=raw_config["udp_server"]["port"],
-        topic=_get_or_use_default(
-            raw_config, ["udp_server", "topic"], "rtls.events"
-        ),  # TODO: Invent way to store default values
+        topic=_get_or_use_default(raw_config, ["udp_server", "topic"], "rtls.events"),
     )
 
+
+def load_config(config_path: Optional[Path] = None) -> AppConfig:
+    global _config
+
+    if _config is not None:
+        return _config
+
+    path = config_path or DEFAULT_CONFIG_PATH
+    raw_config = _load_raw_config(path)
+
+    validation_config = _build_validation_config(raw_config)
+    logging_config = _build_logging_config(raw_config)
+    udp_server = _build_udp_server_config(raw_config)
+
     _config = AppConfig(
-        validation=validation_config, logging=logging_config, udp_server=udp_server
+        validation=validation_config,
+        logging=logging_config,
+        udp_server=udp_server,
     )
 
     logger.info("Configuration loaded successfully")

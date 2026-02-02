@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "tag": {"const": 1},
+    "value": {"type": "number"}
+  },
+  "required": ["tag", "value"],
+  "additionalProperties": false
+}
