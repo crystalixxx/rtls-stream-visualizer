@@ -1,6 +1,7 @@
 import logging
 import json
 import socket
+from collections.abc import Callable
 
 from core.broker.interface import BrockerPublisher
 
@@ -16,7 +17,7 @@ class UdpServer:
         topic: str,
         max_datagram_bytes: int = 64 * 1024,
         parse_json: bool = True,
-        on_decode_error: callable[[bytes, Exception], None] | None = None,
+        on_decode_error: Callable[[bytes, Exception], None] | None = None,
     ):
         self.ip = ip
         self.port = port
