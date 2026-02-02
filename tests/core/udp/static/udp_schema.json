@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "tag": {"type": "number"},
+    "message": {"type": "string"},
+    "values": {
+      "type": "array",
+      "items": {"type": "number"}
+    }
+  },
+  "required": ["tag", "message", "values"],
+  "additionalProperties": false
+}

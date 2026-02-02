@@ -1,5 +1,11 @@
 validation:
-  schema_path: "config/schema.json"
+  schemas:
+    - name: "ls_1000"
+      origin: "ls-1000"
+      schema_path: "config/ls_1000_scheme.json"
+    - name: "another_scheme"
+      origin: "some-device"
+      schema_path: "config/some_device_scheme.json"
 
 logging:
   level: "INFO"

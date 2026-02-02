@@ -4,6 +4,8 @@ import threading
 import time
 
 from core.udp.server import UdpServer
+from core.config import ValidationItem
+from core.validate import Validator
 from tests.conftest import DoomyPublisher
 
 
@@ -67,7 +69,16 @@ def _wait_for_errors(errors, expected_len, timeout=1.0):
 class TestUdpServer:
     def test_publish_json_payload_reencodes_and_adds_headers(self, static_file):
         publisher = DoomyPublisher()
-        server, thread, ip, port = _start_server(publisher, parse_json=True)
+        validator = Validator(
+            [
+                ValidationItem(
+                    name="udp-test",
+                    origin="ls-1000",
+                    schema_path=static_file("udp_schema.json"),
+                )
+            ]
+        )
+        server, thread, ip, port = _start_server(publisher, validator=validator)
 
         payload_path = static_file("pretty_payload.json")
         payload_bytes = payload_path.read_bytes()
@@ -94,29 +105,7 @@ class TestUdpServer:
         assert headers == {
             "source_ip": source_ip,
             "source_port": str(source_port),
-        }
-
-    def test_publish_raw_payload_when_parse_json_false(self, static_file):
-        publisher = DoomyPublisher()
-        server, thread, ip, port = _start_server(publisher, parse_json=False)
-
-        payload_bytes = static_file("raw_payload.txt").read_bytes()
-
-        try:
-            source_ip, source_port = _send_datagram(payload_bytes, ip, port)
-            _wait_for_messages(publisher, "test-topic", 1)
-        finally:
-            _stop_server(server, thread)
-
-        messages = publisher.get_messages()["test-topic"]
-        assert len(messages) == 1
-
-        message, headers = messages[0]
-
-        assert message == payload_bytes
-        assert headers == {
-            "source_ip": source_ip,
-            "source_port": str(source_port),
+            "origin": "ls-1000",
         }
 
     def test_on_decode_error_called_and_message_skipped(self, static_file):
@@ -128,7 +117,6 @@ class TestUdpServer:
 
         server, thread, ip, port = _start_server(
             publisher,
-            parse_json=True,
             on_decode_error=on_decode_error,
         )
 
