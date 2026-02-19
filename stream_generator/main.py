@@ -33,7 +33,7 @@ def main(
     """
 
     config = get_config()
-    validator = Validator(config.validation.schema_path)
+    validator = Validator(config.validation.schema_path, config.validation.origin)
     objects, errors = validator.get_validated_objects_from_file(source)
 
     if errors:

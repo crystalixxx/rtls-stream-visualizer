@@ -14,15 +14,9 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "settings.yaml"
 
 
 @dataclass(frozen=True)
-class ValidationItem:
-    name: str
+class ValidationConfig:
     origin: str
     schema_path: Path
-
-
-@dataclass(frozen=True)
-class ValidationConfig:
-    schemas: List[ValidationItem]
 
 
 @dataclass(frozen=True)
@@ -39,10 +33,16 @@ class UdpServerConfig:
 
 
 @dataclass(frozen=True)
+class BrokerConfig:
+    envelope_version: str
+
+
+@dataclass(frozen=True)
 class AppConfig:
     validation: ValidationConfig
     logging: LoggingConfig
     udp_server: UdpServerConfig
+    broker: BrokerConfig
 
 
 _config: Optional[AppConfig] = None
@@ -90,26 +90,21 @@ def _load_raw_config(path: Path) -> Dict[str, Any]:
 
 
 def _build_validation_config(raw_config: Dict[str, Any]) -> ValidationConfig:
-    schemas = _get_or_use_default(raw_config, ["validation", "schemas"], [])
-    validation_items: list[ValidationItem] = []
+    validation = raw_config.get("validation", {})
+    if not isinstance(validation, Mapping):
+        raise TypeError("validation section must be a mapping (dict)")
 
-    for schema in schemas:
-        if not isinstance(schema, Mapping):
-            raise TypeError("Each validation schema must be a mapping (dict)")
+    schema_path = validation.get("schema_path")
+    if schema_path is None:
+        raise KeyError("validation section must include 'schema_path'")
 
-        schema_path = schema.get("schema_path")
-        if schema_path is None:
-            raise KeyError("validation.schemas item must include 'schema_path'")
-
-        validation_items.append(
-            ValidationItem(
-                name=schema["name"],
-                origin=schema["origin"],
-                schema_path=_resolve_path(schema_path),
-            )
-        )
-
-    return ValidationConfig(schemas=validation_items)
+    origin = _get_or_use_default(
+        raw_config, ["validation", "origin"], "test-stream-json"
+    )
+    return ValidationConfig(
+        origin=origin,
+        schema_path=_resolve_path(schema_path),
+    )
 
 
 def _build_logging_config(raw_config: Dict[str, Any]) -> LoggingConfig:
@@ -126,6 +121,14 @@ def _build_udp_server_config(raw_config: Dict[str, Any]) -> UdpServerConfig:
     )
 
 
+def _build_broker_config(raw_config: Dict[str, Any]) -> BrokerConfig:
+    return BrokerConfig(
+        envelope_version=_get_or_use_default(
+            raw_config, ["broker", "envelope_version"], "1.0"
+        )
+    )
+
+
 def load_config(config_path: Optional[Path] = None) -> AppConfig:
     global _config
 
@@ -138,11 +141,13 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
     validation_config = _build_validation_config(raw_config)
     logging_config = _build_logging_config(raw_config)
     udp_server = _build_udp_server_config(raw_config)
+    broker_config = _build_broker_config(raw_config)
 
     _config = AppConfig(
         validation=validation_config,
         logging=logging_config,
         udp_server=udp_server,
+        broker=broker_config,
     )
 
     logger.info("Configuration loaded successfully")

@@ -1,10 +1,18 @@
 import logging
 import json
 import socket
+import time
+from dataclasses import asdict
 from collections.abc import Callable
 
 from core.broker.interface import BrockerPublisher
+from core.envelope import (
+    EnvelopeContext,
+    EnvelopeRegistry,
+    create_default_envelope_registry,
+)
 from core.validate import Validator
+from stream_handler import LS1000Parser, JsonStreamNormalizer
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +26,11 @@ class UdpServer:
         topic: str,
         max_datagram_bytes: int = 64 * 1024,
         validator: Validator | None = None,
+        parser: LS1000Parser | None = None,
+        json_normalizer: JsonStreamNormalizer | None = None,
+        envelope_version: str = "1.0",
+        envelope_registry: EnvelopeRegistry | None = None,
+        event_type: str = "position",
         on_decode_error: Callable[[bytes, Exception], None] | None = None,
     ):
         self.ip = ip
@@ -26,6 +39,11 @@ class UdpServer:
         self.topic = topic
         self.max_datagram_bytes = max_datagram_bytes
         self.validator = validator
+        self.parser = parser
+        self.json_normalizer = json_normalizer
+        self.envelope_version = envelope_version
+        self.envelope_registry = envelope_registry or create_default_envelope_registry()
+        self.event_type = event_type
         self.on_decode_error = on_decode_error
 
         logger.info(f"Creating UDP server {self.ip}:{self.port}")
@@ -41,41 +59,99 @@ class UdpServer:
                 break
 
             try:
-                message = data
                 headers = {"source_ip": addr[0], "source_port": str(addr[1])}
+                obj = self._process_datagram(data, headers)
+                envelope = self._build_envelope(obj, headers)
+                message = self._serialize_message(envelope)
+                self._publish_message(message, headers)
+            except Exception as exc:
+                self._handle_processing_error(data, exc)
 
-                decoded = data.decode("utf-8")
-                if self.validator is not None:
-                    validated, errors = self.validator.get_validated_object(
-                        decoded, line_no=1
-                    )
+    def _process_datagram(self, data: bytes, headers: dict[str, str]):
+        decoded = data.decode("utf-8")
+        ls1000_obj = self._try_parse_ls1000(decoded, headers)
+        if ls1000_obj is not None:
+            return ls1000_obj
+        return self._normalize_json_payload(decoded, headers)
 
-                    if validated is None:
-                        raise ValueError(f"Validation failed: {errors}")
+    def _try_parse_ls1000(self, decoded: str, headers: dict[str, str]):
+        if self.parser is None:
+            return None
 
-                    obj = validated.data
-                    headers["origin"] = validated.origin
-                else:
-                    obj = json.loads(decoded)
+        parsed, parse_error = self.parser.parse_message(decoded)
+        if parsed is None:
+            logger.debug(
+                "LS-1000 parser skipped message code=%s reason=%s",
+                parse_error.code if parse_error else "unknown",
+                parse_error.message if parse_error else "unknown",
+            )
+            return None
 
-                message = json.dumps(
-                    obj, ensure_ascii=False, separators=(",", ":")
-                ).encode("utf-8")
+        headers["origin"] = "ls-1000"
+        headers["parser"] = "ls1000"
+        return asdict(parsed)
 
-                logger.info(
-                    "Sending into %s message_len=%s message_type=%s headers=%s",
-                    self.topic,
-                    len(message),
-                    type(message).__name__,
-                    headers,
-                )
+    def _normalize_json_payload(self, decoded: str, headers: dict[str, str]):
+        raw_json = None
+        origin = "json"
+        if self.validator is not None:
+            validated, errors = self.validator.get_validated_object(decoded, line_no=1)
+            if validated is None:
+                raise ValueError(f"Validation failed: {errors}")
+            raw_json = validated.data
+            origin = validated.origin
+        else:
+            raw_json = json.loads(decoded)
 
-                self.publisher.publish(self.topic, message, headers=headers)
-            except Exception as e:
-                logger.error("UDP message processing failed: %s", e)
+        headers["origin"] = origin
+        if self.json_normalizer is None:
+            return raw_json
 
-                if self.on_decode_error:
-                    self.on_decode_error(data, e)
+        normalized = self.json_normalizer.normalize(raw_json, raw_message=decoded)
+        if normalized is None:
+            raise ValueError(
+                "JSON normalizer failed to map message into normalized payload"
+            )
+
+        headers["parser"] = "json-normalizer"
+        return asdict(normalized)
+
+    @staticmethod
+    def _serialize_message(obj) -> bytes:
+        return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
+
+    def _build_envelope(self, payload, headers: dict[str, str]) -> dict:
+        origin = "unknown"
+        if isinstance(payload, dict):
+            origin = headers.get("origin", payload.get("origin", "unknown"))
+        context = EnvelopeContext(
+            schema_version=self.envelope_version,
+            event_type=self.event_type,
+            origin=origin,
+            normalized=isinstance(payload, dict)
+            and "tag_id" in payload
+            and "ts_utc_ms" in payload,
+            ingested_at_ms=int(time.time() * 1000),
+        )
+        builder = self.envelope_registry.get(self.envelope_version)
+        return builder.build(payload, context)
+
+    def _publish_message(self, message: bytes, headers: dict[str, str]) -> None:
+        logger.info(
+            "Sending into %s message_len=%s message_type=%s headers=%s",
+            self.topic,
+            len(message),
+            type(message).__name__,
+            headers,
+        )
+        self.publisher.publish(self.topic, message, headers=headers)
+
+    def _handle_processing_error(self, data: bytes, exc: Exception) -> None:
+        logger.error("UDP message processing failed: %s", exc)
+        if self.on_decode_error:
+            self.on_decode_error(data, exc)
 
     def close(self) -> None:
         logger.info(f"Closing UDP server {self.ip}:{self.port}")

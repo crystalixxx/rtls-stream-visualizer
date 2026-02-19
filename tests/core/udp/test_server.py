@@ -4,8 +4,8 @@ import threading
 import time
 
 from core.udp.server import UdpServer
-from core.config import ValidationItem
 from core.validate import Validator
+from stream_handler import LS1000Parser, JsonStreamNormalizer
 from tests.conftest import DoomyPublisher
 
 
@@ -70,15 +70,15 @@ class TestUdpServer:
     def test_publish_json_payload_reencodes_and_adds_headers(self, static_file):
         publisher = DoomyPublisher()
         validator = Validator(
-            [
-                ValidationItem(
-                    name="udp-test",
-                    origin="ls-1000",
-                    schema_path=static_file("udp_schema.json"),
-                )
-            ]
+            schema_path=static_file("udp_schema.json"),
+            origin="test-origin",
         )
-        server, thread, ip, port = _start_server(publisher, validator=validator)
+        json_normalizer = JsonStreamNormalizer(origin="test-origin")
+        server, thread, ip, port = _start_server(
+            publisher,
+            validator=validator,
+            json_normalizer=json_normalizer,
+        )
 
         payload_path = static_file("pretty_payload.json")
         payload_bytes = payload_path.read_bytes()
@@ -93,19 +93,25 @@ class TestUdpServer:
         assert len(messages) == 1
 
         message, headers = messages[0]
-        obj = json.loads(payload_bytes.decode("utf-8"))
-
-        expected = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(
-            "utf-8"
-        )
-
-        assert message == expected
-        assert message != payload_bytes
+        envelope = json.loads(message.decode("utf-8"))
+        assert envelope["schema_version"] == "1.0"
+        assert envelope["event_type"] == "position"
+        assert envelope["origin"] == "test-origin"
+        assert envelope["normalized"] is True
+        assert isinstance(envelope["ingested_at_ms"], int)
+        payload = envelope["payload"]
+        assert payload["origin"] == "test-origin"
+        assert payload["source_type"] == "json"
+        assert payload["tag_id"] == "1"
+        assert isinstance(payload["ts_utc_ms"], int)
+        assert payload["x"] is None
+        assert payload["y"] is None
 
         assert headers == {
             "source_ip": source_ip,
             "source_port": str(source_port),
-            "origin": "ls-1000",
+            "origin": "test-origin",
+            "parser": "json-normalizer",
         }
 
     def test_on_decode_error_called_and_message_skipped(self, static_file):
@@ -133,3 +139,90 @@ class TestUdpServer:
 
         assert isinstance(errors[0][1], Exception)
         assert publisher.get_messages().get("test-topic", []) == []
+
+    def test_ls1000_parser_handles_display_message_before_json_validation(self):
+        publisher = DoomyPublisher()
+        parser = LS1000Parser()
+        server, thread, ip, port = _start_server(
+            publisher,
+            parser=parser,
+        )
+
+        payload_bytes = b"display:68,00A320,1614,1700000000123,2,9.65,3.27,1.50"
+
+        try:
+            source_ip, source_port = _send_datagram(payload_bytes, ip, port)
+            _wait_for_messages(publisher, "test-topic", 1)
+        finally:
+            _stop_server(server, thread)
+
+        messages = publisher.get_messages()["test-topic"]
+        assert len(messages) == 1
+
+        message, headers = messages[0]
+        envelope = json.loads(message.decode("utf-8"))
+        assert envelope["schema_version"] == "1.0"
+        assert envelope["event_type"] == "position"
+        assert envelope["origin"] == "ls-1000"
+        assert envelope["normalized"] is True
+        payload = envelope["payload"]
+        assert payload["source_type"] == "display"
+        assert payload["origin"] == "ls-1000"
+        assert payload["tag_id"] == "00A320"
+        assert payload["ts_utc_ms"] == 1700000000123
+        assert payload["layer"] == 2
+        assert payload["x"] == 9.65
+        assert payload["y"] == 3.27
+        assert payload["z"] == 1.5
+
+        assert headers == {
+            "source_ip": source_ip,
+            "source_port": str(source_port),
+            "origin": "ls-1000",
+            "parser": "ls1000",
+        }
+
+    def test_ls1000_parser_falls_back_to_schema_validator(self, static_file):
+        publisher = DoomyPublisher()
+        parser = LS1000Parser()
+        validator = Validator(
+            schema_path=static_file("udp_schema.json"),
+            origin="test-origin",
+        )
+        json_normalizer = JsonStreamNormalizer(origin="test-origin")
+        server, thread, ip, port = _start_server(
+            publisher,
+            parser=parser,
+            validator=validator,
+            json_normalizer=json_normalizer,
+        )
+
+        payload_path = static_file("pretty_payload.json")
+        payload_bytes = payload_path.read_bytes()
+
+        try:
+            source_ip, source_port = _send_datagram(payload_bytes, ip, port)
+            _wait_for_messages(publisher, "test-topic", 1)
+        finally:
+            _stop_server(server, thread)
+
+        messages = publisher.get_messages()["test-topic"]
+        assert len(messages) == 1
+
+        message, headers = messages[0]
+        envelope = json.loads(message.decode("utf-8"))
+        assert envelope["schema_version"] == "1.0"
+        assert envelope["event_type"] == "position"
+        assert envelope["origin"] == "test-origin"
+        assert envelope["normalized"] is True
+        payload = envelope["payload"]
+        assert payload["origin"] == "test-origin"
+        assert payload["source_type"] == "json"
+        assert payload["tag_id"] == "1"
+        assert isinstance(payload["ts_utc_ms"], int)
+        assert headers == {
+            "source_ip": source_ip,
+            "source_port": str(source_port),
+            "origin": "test-origin",
+            "parser": "json-normalizer",
+        }

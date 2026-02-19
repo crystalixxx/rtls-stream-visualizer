@@ -6,8 +6,6 @@ from attr import dataclass
 from jsonschema import Draft202012Validator
 from typing import Tuple, List, Any, Optional
 
-from core.config import ValidationItem
-
 logger = logging.getLogger(__name__)
 
 
@@ -25,19 +23,19 @@ class ValidatedObject:
 
 
 class Validator:
-    def __init__(self, validators: list[ValidationItem]):
-        if not validators:
-            raise ValueError("At least one validation schema is required")
+    def __init__(self, schema_path: str | Path, origin: str):
+        self.origin = origin
+        self.schema_path = Path(schema_path)
 
-        self.validators: List[Tuple[ValidationItem, Draft202012Validator]] = []
+        with open(self.schema_path, "r", encoding="utf-8") as file:
+            schema = json.load(file)
 
-        for validator in validators:
-            with open(validator.schema_path, "r", encoding="utf-8") as file:
-                scheme = json.load(file)
-
-                self.validators.append((validator, Draft202012Validator(scheme)))
-
-        logger.debug("Validator initialized with validators: %s", self.validators)
+        self.validator = Draft202012Validator(schema)
+        logger.debug(
+            "Validator initialized with schema=%s origin=%s",
+            self.schema_path,
+            self.origin,
+        )
 
     def get_validated_object(
         self, line: str, line_no: int
@@ -48,36 +46,16 @@ class Validator:
         except json.JSONDecodeError as e:
             return None, [ValidationError("", line_no, f"Invalid JSON: {e}")]
 
-        matches: List[ValidationItem] = []
-        errors_by_schema: List[List[ValidationError]] = []
+        errors: List[ValidationError] = []
+        for error in self.validator.iter_errors(obj):
+            logger.info("Validation error: %s", error.message)
+            path = ".".join(str(p) for p in error.path)
+            errors.append(ValidationError(path, line_no, error.message))
 
-        for item, validator in self.validators:
-            errors: List[ValidationError] = []
-            for error in validator.iter_errors(obj):
-                logger.info("Validation error: %s", error.message)
+        if errors:
+            return None, errors
 
-                path = ".".join(str(p) for p in error.path)
-                errors.append(ValidationError(path, line_no, error.message))
-
-            errors_by_schema.append(errors)
-            if not errors:
-                matches.append(item)
-
-        if len(matches) == 1:
-            match = matches[0]
-            return ValidatedObject(origin=match.origin, data=obj), []
-
-        if len(matches) > 1:
-            names = ", ".join(item.name for item in matches)
-            return (
-                None,
-                [ValidationError("", line_no, f"Multiple schemas matched: {names}")],
-            )
-
-        if len(self.validators) == 1:
-            return None, errors_by_schema[0]
-
-        return None, [ValidationError("", line_no, "No matching schema")]
+        return ValidatedObject(origin=self.origin, data=obj), []
 
     def get_validated_objects_from_file(
         self, file_path: str | Path

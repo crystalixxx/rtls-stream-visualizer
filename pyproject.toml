@@ -27,6 +27,7 @@ pythonpath = ["."]
 packages = [
     { include = "core" },
     { include = "stream_generator" },
+    { include = "stream_handler" },
     { include = "udp_receiver" }
 ]
 
