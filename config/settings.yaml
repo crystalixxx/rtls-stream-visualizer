@@ -14,3 +14,11 @@ udp_server:
 
 broker:
   envelope_version: "1.0"
+
+backend:
+  api:
+    host: "127.0.0.1"
+    port: 8000
+
+database:
+  dsn: "postgresql://postgres:postgres@localhost:5432/rtls_stream_visualizer"

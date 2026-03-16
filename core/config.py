@@ -38,11 +38,29 @@ class BrokerConfig:
 
 
 @dataclass(frozen=True)
+class BackendApiConfig:
+    host: str
+    port: int
+
+
+@dataclass(frozen=True)
+class BackendConfig:
+    api: BackendApiConfig
+
+
+@dataclass(frozen=True)
+class DatabaseConfig:
+    dsn: str
+
+
+@dataclass(frozen=True)
 class AppConfig:
     validation: ValidationConfig
     logging: LoggingConfig
     udp_server: UdpServerConfig
     broker: BrokerConfig
+    backend: BackendConfig
+    database: DatabaseConfig
 
 
 _config: Optional[AppConfig] = None
@@ -129,10 +147,33 @@ def _build_broker_config(raw_config: Dict[str, Any]) -> BrokerConfig:
     )
 
 
-def load_config(config_path: Optional[Path] = None) -> AppConfig:
+def _build_backend_config(raw_config: Dict[str, Any]) -> BackendConfig:
+    return BackendConfig(
+        api=BackendApiConfig(
+            host=_get_or_use_default(
+                raw_config, ["backend", "api", "host"], "127.0.0.1"
+            ),
+            port=_get_or_use_default(raw_config, ["backend", "api", "port"], 8000),
+        )
+    )
+
+
+def _build_database_config(raw_config: Dict[str, Any]) -> DatabaseConfig:
+    return DatabaseConfig(
+        dsn=_get_or_use_default(
+            raw_config,
+            ["database", "dsn"],
+            "postgresql://postgres:postgres@localhost:5432/rtls_stream_visualizer",
+        )
+    )
+
+
+def load_config(
+    config_path: Optional[Path] = None, *, force_reload: bool = False
+) -> AppConfig:
     global _config
 
-    if _config is not None:
+    if _config is not None and not force_reload:
         return _config
 
     path = config_path or DEFAULT_CONFIG_PATH
@@ -142,12 +183,16 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
     logging_config = _build_logging_config(raw_config)
     udp_server = _build_udp_server_config(raw_config)
     broker_config = _build_broker_config(raw_config)
+    backend_config = _build_backend_config(raw_config)
+    database_config = _build_database_config(raw_config)
 
     _config = AppConfig(
         validation=validation_config,
         logging=logging_config,
         udp_server=udp_server,
         broker=broker_config,
+        backend=backend_config,
+        database=database_config,
     )
 
     logger.info("Configuration loaded successfully")
@@ -160,3 +205,8 @@ def get_config() -> AppConfig:
         return load_config()
 
     return _config
+
+
+def clear_config_cache() -> None:
+    global _config
+    _config = None
