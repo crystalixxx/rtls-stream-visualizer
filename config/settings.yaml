@@ -1,11 +1,6 @@
 validation:
-  schemas:
-    - name: "ls_1000"
-      origin: "ls-1000"
-      schema_path: "config/ls_1000_scheme.json"
-    - name: "another_scheme"
-      origin: "some-device"
-      schema_path: "config/some_device_scheme.json"
+  origin: "test-stream-json"
+  schema_path: "config/some_device_scheme.json"
 
 logging:
   level: "INFO"
@@ -16,3 +11,6 @@ udp_server:
   ip: "0.0.0.0"
   port: 9999
   topic: "rtls.events"
+
+broker:
+  envelope_version: "1.0"
