@@ -20,6 +20,22 @@ def test_parse_display_with_xyz():
     assert event.lat is None
 
 
+def test_parse_display_preserves_empty_fields_without_shifting_coordinates():
+    parser = LS1000Parser()
+    event, error = parser.parse_message(
+        "display:68,00A320,1614,1700000000123,,9.65,3.27,1.50"
+    )
+
+    assert error is None, error
+    assert event is not None
+    assert event.tag_id == "00A320"
+    assert event.layer is None
+    assert event.x == 9.65
+    assert event.y == 3.27
+    assert event.z == 1.5
+    assert event.area is None
+
+
 def test_parse_status1():
     parser = LS1000Parser()
     event, error = parser.parse_message(
@@ -60,7 +76,7 @@ def test_parse_gpsposi_with_lng_lat():
 def test_parse_json_with_local_coordinates():
     parser = LS1000Parser()
     event, error = parser.parse_message(
-        '{"devid":"ABC123","timestamp":1700000000456,"position":{"x":1.2,"y":2.3,"z":3.4},"layer":1}'
+        '{"devid":"ABC123","seq":42,"timestamp":1700000000456,"samples":[],"position":{"rgn":"zone-1","x":1.2,"y":2.3,"z":3.4},"layer":1}'
     )
 
     assert error is None, error
@@ -77,7 +93,7 @@ def test_parse_json_with_local_coordinates():
 def test_parse_json_with_lng_lat_only():
     parser = LS1000Parser()
     event, error = parser.parse_message(
-        '{"tag_id":"ABC123","ts_utc_ms":1700000000456,"lng":37.6,"lat":55.7}'
+        '{"devid":"ABC123","seq":42,"timestamp":1700000000456,"samples":[],"lng":37.6,"lat":55.7}'
     )
 
     assert error is None, error
@@ -87,6 +103,17 @@ def test_parse_json_with_lng_lat_only():
     assert event.z is None
     assert event.lng == 37.6
     assert event.lat == 55.7
+
+
+def test_parse_json_rejects_non_ls1000_payload():
+    parser = LS1000Parser()
+    event, error = parser.parse_message(
+        '{"tag_id":"ABC123","ts_utc_ms":1700000000456,"lng":37.6,"lat":55.7}'
+    )
+
+    assert event is None
+    assert error is not None
+    assert error.code == "unsupported_json_payload"
 
 
 def test_unsupported_message_type_in_mvp():

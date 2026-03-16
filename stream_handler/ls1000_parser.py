@@ -34,6 +34,7 @@ class LS1000Parser:
     _BASE_TYPES = {"display", "status1", "status2", "gpsposi"}
     _UNSUPPORTED_TYPES = {"warning", "summary", "rawdata"}
     _COORD_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
+    _JSON_MARKERS = ("devid", "seq", "samples", "position")
 
     def parse_message(
         self, raw_message: str
@@ -74,8 +75,8 @@ class LS1000Parser:
                 source_type=source_type,
             )
 
-        tokens = [part.strip() for part in payload.split(",") if part.strip()]
-        if not tokens:
+        tokens = [part.strip() for part in payload.split(",")]
+        if not any(token for token in tokens):
             return None, ParseError(
                 code="invalid_payload",
                 message="Payload is empty",
@@ -100,6 +101,14 @@ class LS1000Parser:
             return None, ParseError(
                 code="invalid_json",
                 message=f"Invalid JSON: {exc}",
+                raw_message=raw_message,
+                source_type="json",
+            )
+
+        if not self._is_ls1000_json(obj):
+            return None, ParseError(
+                code="unsupported_json_payload",
+                message="JSON payload does not match LS-1000 markers",
                 raw_message=raw_message,
                 source_type="json",
             )
@@ -147,6 +156,21 @@ class LS1000Parser:
             ),
             None,
         )
+
+    @classmethod
+    def _is_ls1000_json(cls, obj: dict) -> bool:
+        if not any(marker in obj for marker in cls._JSON_MARKERS):
+            return False
+
+        position = obj.get("position")
+        if position is not None and not isinstance(position, dict):
+            return False
+
+        samples = obj.get("samples")
+        if samples is not None and not isinstance(samples, list):
+            return False
+
+        return True
 
     def _parse_display(
         self, raw_message: str, tokens: list[str]
