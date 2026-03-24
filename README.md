@@ -70,3 +70,40 @@ sequenceDiagram
   
   Note over graf: Дашборды и алерты
 ```
+
+## Backend MVP
+Для первого backend-этапа в проекте добавляется отдельный FastAPI сервис с одной ручкой `GET /health`.
+Сервис использует PostgreSQL через `psycopg` и SQL-first миграции через `yoyo-migrations`.
+
+### Configuration
+- backend runtime host/port берутся из `config/settings.yaml` секции `backend.api`
+- PostgreSQL DSN по умолчанию берётся из `config/settings.yaml` секции `database`
+- `DATABASE_DSN` можно передать через env для секрета/override без хранения чувствительных данных в YAML
+
+### Run backend
+```bash
+poetry run python -m backend.main
+```
+
+### Run migrations
+```bash
+poetry run yoyo apply --database "$DATABASE_DSN" migrations
+poetry run yoyo rollback --database "$DATABASE_DSN" migrations
+poetry run yoyo list --database "$DATABASE_DSN" migrations
+```
+
+### Run with Docker Compose
+```bash
+docker compose up --build
+```
+
+Compose поднимает:
+- `postgres` с БД `rtls_stream_visualizer`
+- `backend`, который перед стартом API автоматически применяет миграции
+
+Параметры запуска и секреты для compose берутся из файла `.env` в корне проекта.
+
+После старта health-check доступен на:
+```bash
+curl http://127.0.0.1:8000/health
+```

@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rtls-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: .
@@ -24,10 +41,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       API_HOST: ${API_HOST}
       API_PORT: ${API_PORT}
       DATABASE_DSN: ${DATABASE_DSN}
+      RABBITMQ_URL: ${RABBITMQ_URL}
     command: >
       sh -c "yoyo apply --batch --database \"$DATABASE_DSN\" migrations &&
              python -m backend.main"
@@ -45,5 +65,21 @@ services:
       timeout: 5s
       retries: 5
 
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rtls-consumer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      DATABASE_DSN: ${DATABASE_DSN}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+    command: python -m backend.consumer
+
 volumes:
   postgres_data:
+  rabbitmq_data:

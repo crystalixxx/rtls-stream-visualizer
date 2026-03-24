@@ -49,6 +49,15 @@ class BackendConfig:
 
 
 @dataclass(frozen=True)
+class RabbitMQConfig:
+    url: str
+    exchange: str
+    exchange_type: str
+    queue: str
+    routing_key: str
+
+
+@dataclass(frozen=True)
 class DatabaseConfig:
     dsn: str
 
@@ -59,6 +68,7 @@ class AppConfig:
     logging: LoggingConfig
     udp_server: UdpServerConfig
     broker: BrokerConfig
+    rabbitmq: RabbitMQConfig
     backend: BackendConfig
     database: DatabaseConfig
 
@@ -147,6 +157,24 @@ def _build_broker_config(raw_config: Dict[str, Any]) -> BrokerConfig:
     )
 
 
+def _build_rabbitmq_config(raw_config: Dict[str, Any]) -> RabbitMQConfig:
+    return RabbitMQConfig(
+        url=_get_or_use_default(
+            raw_config,
+            ["rabbitmq", "url"],
+            "amqp://guest:guest@localhost:5672/",
+        ),
+        exchange=_get_or_use_default(raw_config, ["rabbitmq", "exchange"], "rtls"),
+        exchange_type=_get_or_use_default(
+            raw_config, ["rabbitmq", "exchange_type"], "topic"
+        ),
+        queue=_get_or_use_default(raw_config, ["rabbitmq", "queue"], "rtls.events"),
+        routing_key=_get_or_use_default(
+            raw_config, ["rabbitmq", "routing_key"], "rtls.events"
+        ),
+    )
+
+
 def _build_backend_config(raw_config: Dict[str, Any]) -> BackendConfig:
     return BackendConfig(
         api=BackendApiConfig(
@@ -183,6 +211,7 @@ def load_config(
     logging_config = _build_logging_config(raw_config)
     udp_server = _build_udp_server_config(raw_config)
     broker_config = _build_broker_config(raw_config)
+    rabbitmq_config = _build_rabbitmq_config(raw_config)
     backend_config = _build_backend_config(raw_config)
     database_config = _build_database_config(raw_config)
 
@@ -191,6 +220,7 @@ def load_config(
         logging=logging_config,
         udp_server=udp_server,
         broker=broker_config,
+        rabbitmq=rabbitmq_config,
         backend=backend_config,
         database=database_config,
     )

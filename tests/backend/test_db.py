@@ -1,4 +1,5 @@
 from backend.config import BackendConfig, ApiConfig, DatabaseConfig
+from core.config import RabbitMQConfig
 from backend.db import get_connection, probe_database
 
 
@@ -36,6 +37,13 @@ def _config() -> BackendConfig:
     return BackendConfig(
         api=ApiConfig(host="127.0.0.1", port=8000),
         database=DatabaseConfig(dsn="postgresql://postgres:postgres@localhost:5432/db"),
+        rabbitmq=RabbitMQConfig(
+            url="amqp://guest:guest@localhost:5672/",
+            exchange="rtls",
+            exchange_type="topic",
+            queue="rtls.events",
+            routing_key="rtls.events",
+        ),
     )
 
 

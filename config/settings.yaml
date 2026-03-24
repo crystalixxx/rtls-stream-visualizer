@@ -15,6 +15,13 @@ udp_server:
 broker:
   envelope_version: "1.0"
 
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
+  exchange: "rtls"
+  exchange_type: "topic"
+  queue: "rtls.events"
+  routing_key: "rtls.events"
+
 backend:
   api:
     host: "127.0.0.1"
