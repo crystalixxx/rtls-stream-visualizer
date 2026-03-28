@@ -129,6 +129,11 @@ class TestUpsertCurrentPosition:
         assert "ON CONFLICT (tag_id) DO UPDATE" in sql
         assert params["tag_id"] == "tag-001"
 
+    def test_upsert_has_recency_guard(self):
+        sql = load_sql("upsert_current_position")
+
+        assert "WHERE EXCLUDED.ts_utc_ms >= current_positions.ts_utc_ms" in sql
+
 
 class TestPersistEnvelope:
     def test_inserts_event_and_upserts_current_then_commits(self):

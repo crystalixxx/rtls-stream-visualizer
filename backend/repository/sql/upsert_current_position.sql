@@ -26,3 +26,4 @@ ON CONFLICT (tag_id) DO UPDATE SET
     lat = EXCLUDED.lat,
     raw_message = EXCLUDED.raw_message,
     parse_warnings = EXCLUDED.parse_warnings
+WHERE EXCLUDED.ts_utc_ms >= current_positions.ts_utc_ms

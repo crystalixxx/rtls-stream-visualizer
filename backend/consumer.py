@@ -18,7 +18,7 @@ async def on_message(
     config: BackendConfig,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
-    async with message.process(requeue=True, reject_on_redelivered=True):
+    async with message.process(requeue=True):
         body = message.body
         try:
             envelope = json.loads(body)
