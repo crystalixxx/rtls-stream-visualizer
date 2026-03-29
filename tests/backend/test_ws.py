@@ -65,9 +65,8 @@ _SNAPSHOT = [
 ]
 
 
-@patch("backend.api.ws.get_all_current_positions", return_value=_SNAPSHOT)
-@patch("backend.api.ws.get_connection")
-def test_ws_receives_snapshot_on_connect(mock_conn, mock_get_all):
+@patch("backend.api.ws._snapshot", return_value=_SNAPSHOT)
+def test_ws_receives_snapshot_on_connect(mock_snap):
     app = _make_app()
     client = TestClient(app)
 
@@ -75,12 +74,11 @@ def test_ws_receives_snapshot_on_connect(mock_conn, mock_get_all):
         data = ws.receive_json()
 
     assert data == _SNAPSHOT
-    mock_get_all.assert_called_once()
+    mock_snap.assert_called_once()
 
 
-@patch("backend.api.ws.get_all_current_positions", return_value=[])
-@patch("backend.api.ws.get_connection")
-def test_ws_receives_live_update(mock_conn, mock_get_all):
+@patch("backend.api.ws._snapshot", return_value=[])
+def test_ws_receives_live_update(mock_snap):
     broadcast = Broadcast()
     app = _make_app(broadcast)
     client = TestClient(app)
@@ -91,15 +89,16 @@ def test_ws_receives_live_update(mock_conn, mock_get_all):
         snapshot = ws.receive_json()
         assert snapshot == []
 
-        asyncio.get_event_loop().run_until_complete(broadcast.publish(envelope))
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(broadcast.publish(envelope))
+        loop.close()
 
         update = ws.receive_json()
         assert update == envelope
 
 
-@patch("backend.api.ws.get_all_current_positions", return_value=[])
-@patch("backend.api.ws.get_connection")
-def test_ws_disconnect_unsubscribes(mock_conn, mock_get_all):
+@patch("backend.api.ws._snapshot", return_value=[])
+def test_ws_disconnect_unsubscribes(mock_snap):
     broadcast = Broadcast()
     app = _make_app(broadcast)
     client = TestClient(app)
@@ -111,9 +110,8 @@ def test_ws_disconnect_unsubscribes(mock_conn, mock_get_all):
     assert broadcast.subscriber_count == 0
 
 
-@patch("backend.api.ws.get_all_current_positions", return_value=[])
-@patch("backend.api.ws.get_connection")
-def test_ws_empty_snapshot(mock_conn, mock_get_all):
+@patch("backend.api.ws._snapshot", return_value=[])
+def test_ws_empty_snapshot(mock_snap):
     app = _make_app()
     client = TestClient(app)
 
