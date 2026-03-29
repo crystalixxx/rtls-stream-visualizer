@@ -102,6 +102,10 @@ export function usePositions(): UsePositionsResult {
       const pos = positionFromEnvelope(envelope);
       recordEvent(pos.ts_utc_ms);
       setPositions((prev) => {
+        const existing = prev.get(pos.tag_id);
+        if (existing && existing.ts_utc_ms > pos.ts_utc_ms) {
+          return prev;
+        }
         const next = new Map(prev);
         next.set(pos.tag_id, pos);
         return next;

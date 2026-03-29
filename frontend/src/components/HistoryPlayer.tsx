@@ -67,18 +67,34 @@ export function HistoryPlayer({
 
     const from = fromTs ? new Date(fromTs).getTime() : null;
     const to = toTs ? new Date(toTs).getTime() : null;
+    const PAGE_SIZE = 1000;
 
     try {
       const allPoints: Position[] = [];
       for (const tagId of selectedTags) {
-        const params = new URLSearchParams({ tag_id: tagId, limit: "1000" });
-        if (from !== null) params.set("from_ts", String(from));
-        if (to !== null) params.set("to_ts", String(to));
+        let offset = 0;
+        let total = Infinity;
 
-        const res = await fetch(`/api/v1/positions/history?${params}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status} for ${tagId}`);
-        const body = (await res.json()) as { items: Position[] };
-        allPoints.push(...body.items);
+        while (offset < total) {
+          const params = new URLSearchParams({
+            tag_id: tagId,
+            limit: String(PAGE_SIZE),
+            offset: String(offset),
+          });
+          if (from !== null) params.set("from_ts", String(from));
+          if (to !== null) params.set("to_ts", String(to));
+
+          const res = await fetch(`/api/v1/positions/history?${params}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status} for ${tagId}`);
+          const body = (await res.json()) as {
+            items: Position[];
+            total: number;
+          };
+          allPoints.push(...body.items);
+          total = body.total;
+          offset += body.items.length;
+          if (body.items.length < PAGE_SIZE) break;
+        }
       }
       onLoad(allPoints);
     } catch (err) {
