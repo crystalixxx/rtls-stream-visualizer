@@ -61,7 +61,9 @@
         "z": { "type": "number", "description": "Z coordinate." }
       },
       "required": ["rgn", "x", "y", "z"]
-    }
+    },
+    "lat": { "type": "number", "description": "Latitude (WGS-84)." },
+    "lng": { "type": "number", "description": "Longitude (WGS-84)." }
   },
   "required": ["devid", "seq", "timestamp", "samples", "position"]
 }

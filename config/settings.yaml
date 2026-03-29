@@ -1,6 +1,6 @@
 validation:
-  origin: "test-stream-json"
-  schema_path: "config/some_device_scheme.json"
+  origin: "ls-1000"
+  schema_path: "config/ls_1000_scheme.json"
 
 logging:
   level: "INFO"
@@ -28,4 +28,4 @@ backend:
     port: 8000
 
 database:
-  dsn: "postgresql://postgres:postgres@localhost:5432/rtls_stream_visualizer"
+  dsn: "postgresql://postgres:postgres@localhost:5433/rtls_stream_visualizer"

@@ -86,6 +86,20 @@ def get_all_current_positions(connection: Connection[Any]) -> list[dict[str, Any
     return [dict(zip(_CURRENT_POS_COLUMNS, row)) for row in rows]
 
 
+def _build_time_filters(
+    from_ts: int | None, to_ts: int | None
+) -> tuple[str, dict[str, Any]]:
+    clauses = ""
+    params: dict[str, Any] = {}
+    if from_ts is not None:
+        clauses += " AND ts_utc_ms >= %(from_ts)s"
+        params["from_ts"] = from_ts
+    if to_ts is not None:
+        clauses += " AND ts_utc_ms <= %(to_ts)s"
+        params["to_ts"] = to_ts
+    return clauses, params
+
+
 def get_position_history(
     connection: Connection[Any],
     tag_id: str,
@@ -94,15 +108,13 @@ def get_position_history(
     limit: int,
     offset: int,
 ) -> list[dict[str, Any]]:
-    params = {
-        "tag_id": tag_id,
-        "from_ts": from_ts,
-        "to_ts": to_ts,
-        "limit": limit,
-        "offset": offset,
-    }
+    time_clauses, time_params = _build_time_filters(from_ts, to_ts)
+    base = load_sql("select_position_history")
+    query = base.replace("ORDER BY", f"{time_clauses}\nORDER BY")
+    params: dict[str, Any] = {"tag_id": tag_id, "limit": limit, "offset": offset}
+    params.update(time_params)
     with connection.cursor() as cursor:
-        cursor.execute(load_sql("select_position_history"), params)
+        cursor.execute(query, params)
         rows = cursor.fetchall()
     return [dict(zip(_HISTORY_COLUMNS, row)) for row in rows]
 
@@ -113,8 +125,12 @@ def count_position_history(
     from_ts: int | None,
     to_ts: int | None,
 ) -> int:
-    params = {"tag_id": tag_id, "from_ts": from_ts, "to_ts": to_ts}
+    time_clauses, time_params = _build_time_filters(from_ts, to_ts)
+    base = load_sql("count_position_history")
+    query = base + time_clauses
+    params: dict[str, Any] = {"tag_id": tag_id}
+    params.update(time_params)
     with connection.cursor() as cursor:
-        cursor.execute(load_sql("count_position_history"), params)
+        cursor.execute(query, params)
         row = cursor.fetchone()
     return row[0] if row else 0
