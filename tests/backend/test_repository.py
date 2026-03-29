@@ -6,6 +6,9 @@ from backend.repository import (
     insert_position_event,
     upsert_current_position,
     persist_envelope,
+    get_all_current_positions,
+    get_position_history,
+    count_position_history,
 )
 from backend.repository.positions import _extract_params
 from backend.repository.queries import load_sql
@@ -77,8 +80,9 @@ class TestExtractParams:
 
 
 class DummyCursor:
-    def __init__(self):
+    def __init__(self, rows=None):
         self.executed = []
+        self._rows = rows or []
 
     def __enter__(self):
         return self
@@ -89,10 +93,16 @@ class DummyCursor:
     def execute(self, query, params=None):
         self.executed.append((query, params))
 
+    def fetchall(self):
+        return self._rows
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
 
 class DummyConnection:
-    def __init__(self):
-        self._cursor = DummyCursor()
+    def __init__(self, cursor_rows=None):
+        self._cursor = DummyCursor(rows=cursor_rows)
         self.committed = False
 
     def cursor(self):
@@ -164,3 +174,110 @@ class TestLoadSql:
     def test_raises_for_missing_file(self):
         with pytest.raises(FileNotFoundError):
             load_sql("nonexistent_query")
+
+    def test_loads_select_all_current_positions(self):
+        sql = load_sql("select_all_current_positions")
+
+        assert "SELECT" in sql
+        assert "current_positions" in sql
+
+    def test_loads_select_position_history(self):
+        sql = load_sql("select_position_history")
+
+        assert "position_events" in sql
+        assert "%(tag_id)s" in sql
+
+    def test_loads_count_position_history(self):
+        sql = load_sql("count_position_history")
+
+        assert "COUNT(*)" in sql
+        assert "position_events" in sql
+
+
+class TestGetAllCurrentPositions:
+    def test_returns_list_of_dicts(self):
+        rows = [
+            (
+                "tag-001",
+                1700000000000,
+                "display",
+                None,
+                1,
+                "zone-A",
+                10.5,
+                20.3,
+                0.0,
+                None,
+                None,
+                "ls-1000",
+            ),
+        ]
+        conn = DummyConnection(cursor_rows=rows)
+
+        result = get_all_current_positions(conn)
+
+        assert len(result) == 1
+        assert result[0]["tag_id"] == "tag-001"
+        assert result[0]["x"] == 10.5
+        assert result[0]["origin"] == "ls-1000"
+
+    def test_returns_empty_list_when_no_rows(self):
+        conn = DummyConnection(cursor_rows=[])
+
+        result = get_all_current_positions(conn)
+
+        assert result == []
+
+
+class TestGetPositionHistory:
+    def test_returns_rows_as_dicts(self):
+        rows = [
+            (
+                "tag-001",
+                1700000000000,
+                "display",
+                None,
+                1,
+                "zone-A",
+                10.5,
+                20.3,
+                0.0,
+                None,
+                None,
+                "ls-1000",
+            ),
+        ]
+        conn = DummyConnection(cursor_rows=rows)
+
+        result = get_position_history(conn, "tag-001", None, None, 100, 0)
+
+        assert len(result) == 1
+        assert result[0]["tag_id"] == "tag-001"
+
+    def test_passes_params_to_sql(self):
+        conn = DummyConnection(cursor_rows=[])
+
+        get_position_history(conn, "tag-X", 100, 200, 50, 10)
+
+        sql, params = conn._cursor.executed[0]
+        assert params["tag_id"] == "tag-X"
+        assert params["from_ts"] == 100
+        assert params["to_ts"] == 200
+        assert params["limit"] == 50
+        assert params["offset"] == 10
+
+
+class TestCountPositionHistory:
+    def test_returns_count(self):
+        conn = DummyConnection(cursor_rows=[(42,)])
+
+        result = count_position_history(conn, "tag-001", None, None)
+
+        assert result == 42
+
+    def test_returns_zero_when_no_rows(self):
+        conn = DummyConnection(cursor_rows=[])
+
+        result = count_position_history(conn, "tag-001", None, None)
+
+        assert result == 0
