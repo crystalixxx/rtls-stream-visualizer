@@ -118,23 +118,27 @@ export function HistoryPlayer({
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <input
-          type="datetime-local"
-          value={fromTs}
-          onChange={(e) => setFromTs(e.target.value)}
-          className="flex-1 rounded border border-gray-300 px-1.5 py-1 text-xs"
-          placeholder="From"
-          data-testid="history-from"
-        />
-        <input
-          type="datetime-local"
-          value={toTs}
-          onChange={(e) => setToTs(e.target.value)}
-          className="flex-1 rounded border border-gray-300 px-1.5 py-1 text-xs"
-          placeholder="To"
-          data-testid="history-to"
-        />
+      <div className="flex flex-col gap-1">
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-gray-400">From</span>
+          <input
+            type="datetime-local"
+            value={fromTs}
+            onChange={(e) => setFromTs(e.target.value)}
+            className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs"
+            data-testid="history-from"
+          />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-gray-400">To</span>
+          <input
+            type="datetime-local"
+            value={toTs}
+            onChange={(e) => setToTs(e.target.value)}
+            className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs"
+            data-testid="history-to"
+          />
+        </label>
       </div>
 
       <div className="flex gap-2">

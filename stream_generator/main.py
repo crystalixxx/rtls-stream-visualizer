@@ -39,8 +39,10 @@ def main(
     if errors:
         logger.error("Validation errors: %s", errors)
 
+    raw_objects = [obj.data for obj in objects]
+
     with UdpClient(ip, port) as udp_client:
-        udp_client.send(objects, batch_size, time_between_batches)
+        udp_client.send(raw_objects, batch_size, time_between_batches)
 
     logger.info("Stream generated successfully")
 
