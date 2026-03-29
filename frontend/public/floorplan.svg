@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <rect width="800" height="600" fill="#f3f4f6" stroke="#d1d5db" stroke-width="2"/>
+  <rect x="40" y="40" width="300" height="200" fill="none" stroke="#9ca3af" stroke-width="1.5" rx="4"/>
+  <text x="190" y="145" text-anchor="middle" fill="#6b7280" font-size="14" font-family="sans-serif">Room A</text>
+  <rect x="380" y="40" width="380" height="200" fill="none" stroke="#9ca3af" stroke-width="1.5" rx="4"/>
+  <text x="570" y="145" text-anchor="middle" fill="#6b7280" font-size="14" font-family="sans-serif">Room B</text>
+  <rect x="40" y="280" width="720" height="280" fill="none" stroke="#9ca3af" stroke-width="1.5" rx="4"/>
+  <text x="400" y="425" text-anchor="middle" fill="#6b7280" font-size="14" font-family="sans-serif">Open Area</text>
+  <line x1="340" y1="140" x2="380" y2="140" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <line x1="400" y1="240" x2="400" y2="280" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="6,3"/>
+</svg>
