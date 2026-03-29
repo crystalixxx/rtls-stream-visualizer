@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -23,11 +24,12 @@ async def positions_ws(websocket: WebSocket) -> None:
 
     await websocket.accept()
 
-    snapshot = _snapshot(config)
-    await websocket.send_json(snapshot)
-
     queue = broadcast.subscribe()
     try:
+        loop = asyncio.get_running_loop()
+        snapshot = await loop.run_in_executor(None, _snapshot, config)
+        await websocket.send_json(snapshot)
+
         while True:
             envelope = await queue.get()
             await websocket.send_json(envelope)
