@@ -65,21 +65,6 @@ services:
       timeout: 5s
       retries: 5
 
-  consumer:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: rtls-consumer
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      DATABASE_DSN: ${DATABASE_DSN}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-    command: python -m backend.consumer
-
 volumes:
   postgres_data:
   rabbitmq_data:

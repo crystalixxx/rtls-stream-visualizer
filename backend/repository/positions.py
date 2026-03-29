@@ -59,3 +59,62 @@ def persist_envelope(connection: Connection[Any], envelope: dict[str, Any]) -> N
         "Persisted envelope for tag_id=%s",
         envelope.get("payload", {}).get("tag_id"),
     )
+
+
+_CURRENT_POS_COLUMNS = (
+    "tag_id",
+    "ts_utc_ms",
+    "source_type",
+    "status",
+    "layer",
+    "area",
+    "x",
+    "y",
+    "z",
+    "lng",
+    "lat",
+    "origin",
+)
+
+_HISTORY_COLUMNS = _CURRENT_POS_COLUMNS
+
+
+def get_all_current_positions(connection: Connection[Any]) -> list[dict[str, Any]]:
+    with connection.cursor() as cursor:
+        cursor.execute(load_sql("select_all_current_positions"))
+        rows = cursor.fetchall()
+    return [dict(zip(_CURRENT_POS_COLUMNS, row)) for row in rows]
+
+
+def get_position_history(
+    connection: Connection[Any],
+    tag_id: str,
+    from_ts: int | None,
+    to_ts: int | None,
+    limit: int,
+    offset: int,
+) -> list[dict[str, Any]]:
+    params = {
+        "tag_id": tag_id,
+        "from_ts": from_ts,
+        "to_ts": to_ts,
+        "limit": limit,
+        "offset": offset,
+    }
+    with connection.cursor() as cursor:
+        cursor.execute(load_sql("select_position_history"), params)
+        rows = cursor.fetchall()
+    return [dict(zip(_HISTORY_COLUMNS, row)) for row in rows]
+
+
+def count_position_history(
+    connection: Connection[Any],
+    tag_id: str,
+    from_ts: int | None,
+    to_ts: int | None,
+) -> int:
+    params = {"tag_id": tag_id, "from_ts": from_ts, "to_ts": to_ts}
+    with connection.cursor() as cursor:
+        cursor.execute(load_sql("count_position_history"), params)
+        row = cursor.fetchone()
+    return row[0] if row else 0
