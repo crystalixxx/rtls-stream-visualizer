@@ -5,16 +5,25 @@ import time
 from dataclasses import asdict
 from collections.abc import Callable
 
+from opentelemetry import context as otel_context, trace
+
 from core.broker.interface import BrockerPublisher
 from core.envelope import (
     EnvelopeContext,
     EnvelopeRegistry,
     create_default_envelope_registry,
 )
+from core.tracing import (
+    extract_from_dict,
+    inject_into_headers,
+    strip_trace_keys,
+)
 from core.validate import Validator
 from stream_handler import LS1000Parser, JsonStreamNormalizer
 
 logger = logging.getLogger(__name__)
+
+_tracer = trace.get_tracer(__name__)
 
 
 class UdpServer:
@@ -60,12 +69,36 @@ class UdpServer:
 
             try:
                 headers = {"source_ip": addr[0], "source_port": str(addr[1])}
-                obj = self._process_datagram(data, headers)
-                envelope = self._build_envelope(obj, headers)
-                message = self._serialize_message(envelope)
-                self._publish_message(message, headers)
+                parent_ctx = self._extract_trace_context(data)
+                token = otel_context.attach(parent_ctx) if parent_ctx else None
+                try:
+                    with _tracer.start_as_current_span(
+                        "process_datagram",
+                        attributes={
+                            "net.peer.ip": addr[0],
+                            "net.peer.port": addr[1],
+                        },
+                    ):
+                        obj = self._process_datagram(data, headers)
+                        envelope = self._build_envelope(obj, headers)
+                        inject_into_headers(headers)
+                        message = self._serialize_message(envelope)
+                        self._publish_message(message, headers)
+                finally:
+                    if token is not None:
+                        otel_context.detach(token)
             except Exception as exc:
                 self._handle_processing_error(data, exc)
+
+    def _extract_trace_context(self, data: bytes):
+        """Best-effort extraction of W3C trace context from a JSON datagram."""
+        try:
+            obj = json.loads(data)
+            if isinstance(obj, dict) and "traceparent" in obj:
+                return extract_from_dict(obj)
+        except Exception:
+            pass
+        return None
 
     def _process_datagram(self, data: bytes, headers: dict[str, str]):
         decoded = data.decode("utf-8")
@@ -102,6 +135,9 @@ class UdpServer:
             origin = validated.origin
         else:
             raw_json = json.loads(decoded)
+
+        if isinstance(raw_json, dict):
+            strip_trace_keys(raw_json)
 
         headers["origin"] = origin
         if self.json_normalizer is None:

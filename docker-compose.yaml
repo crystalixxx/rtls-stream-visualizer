@@ -33,6 +33,56 @@ services:
       timeout: 5s
       retries: 10
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: rtls-otel-collector
+    volumes:
+      - ./config/otel/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      tempo:
+        condition: service_started
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: rtls-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./config/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: rtls-prometheus
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: rtls-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboard.json:/var/lib/grafana/dashboards/rtls.json
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_started
+
   backend:
     build:
       context: .
@@ -48,6 +98,8 @@ services:
       API_PORT: ${API_PORT}
       DATABASE_DSN: ${DATABASE_DSN}
       RABBITMQ_URL: ${RABBITMQ_URL}
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      LOG_FORMAT: "json"
     command: >
       sh -c "yoyo apply --batch --database \"$DATABASE_DSN\" migrations &&
              python -m backend.main"
@@ -79,3 +131,4 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  tempo_data:

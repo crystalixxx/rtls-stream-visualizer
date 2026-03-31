@@ -1,13 +1,24 @@
 import asyncio
 import logging
+import time as _time
 import threading
 from collections.abc import Mapping
 
 import aio_pika
+from prometheus_client import Counter, Histogram
 
 from core.config import RabbitMQConfig
 
 logger = logging.getLogger(__name__)
+
+_PUBLISHER_MESSAGES_TOTAL = Counter(
+    "publisher_messages_total",
+    "Total messages published to RabbitMQ",
+)
+_PUBLISHER_LATENCY = Histogram(
+    "publisher_publish_duration_seconds",
+    "RabbitMQ publish latency in seconds",
+)
 
 
 class RabbitMQPublisher:
@@ -70,7 +81,10 @@ class RabbitMQPublisher:
             headers=dict(headers) if headers else None,
         )
         routing_key = topic or self._config.routing_key
+        t0 = _time.monotonic()
         await self._exchange.publish(amqp_message, routing_key=routing_key)
+        _PUBLISHER_LATENCY.observe(_time.monotonic() - t0)
+        _PUBLISHER_MESSAGES_TOTAL.inc()
         logger.debug(
             "Published message to exchange=%s routing_key=%s size=%d",
             self._config.exchange,

@@ -1,19 +1,25 @@
+import copy
 import logging
-import typer
 
+import typer
+from opentelemetry import trace
 from pathlib import Path
 
 from core.logging_config import setup_logging
 from core.config import load_config, get_config
+from core.tracing import get_otlp_endpoint, init_tracing, inject_into_dict
 from core.validate import Validator
 from core.udp.client import UdpClient
 
 logger = logging.getLogger(__name__)
 
+tracer = trace.get_tracer(__name__)
+
 
 def init():
     setup_logging()
     load_config()
+    init_tracing("stream-generator", get_otlp_endpoint())
     logger.info("Application starting")
 
 
@@ -42,9 +48,24 @@ def main(
     raw_objects = [obj.data for obj in objects]
 
     with UdpClient(ip, port) as udp_client:
-        udp_client.send(raw_objects, batch_size, time_between_batches)
+        with tracer.start_as_current_span(
+            "generate_stream",
+            attributes={"udp.host": ip, "udp.port": port, "batch.size": batch_size},
+        ):
+            traced_objects = _inject_trace_context(raw_objects)
+            udp_client.send(traced_objects, batch_size, time_between_batches)
 
     logger.info("Stream generated successfully")
+
+
+def _inject_trace_context(objects: list[dict]) -> list[dict]:
+    """Return shallow copies of *objects* with ``traceparent`` injected."""
+    result: list[dict] = []
+    for obj in objects:
+        clone = copy.copy(obj)
+        inject_into_dict(clone)
+        result.append(clone)
+    return result
 
 
 if __name__ == "__main__":
