@@ -127,17 +127,15 @@ class UdpServer:
     def _normalize_json_payload(self, decoded: str, headers: dict[str, str]):
         raw_json = None
         origin = "json"
+        cleaned = self._strip_trace_from_string(decoded)
         if self.validator is not None:
-            validated, errors = self.validator.get_validated_object(decoded, line_no=1)
+            validated, errors = self.validator.get_validated_object(cleaned, line_no=1)
             if validated is None:
                 raise ValueError(f"Validation failed: {errors}")
             raw_json = validated.data
             origin = validated.origin
         else:
-            raw_json = json.loads(decoded)
-
-        if isinstance(raw_json, dict):
-            strip_trace_keys(raw_json)
+            raw_json = json.loads(cleaned)
 
         headers["origin"] = origin
         if self.json_normalizer is None:
@@ -151,6 +149,22 @@ class UdpServer:
 
         headers["parser"] = "json-normalizer"
         return asdict(normalized)
+
+    @staticmethod
+    def _strip_trace_from_string(decoded: str) -> str:
+        """Remove ``traceparent``/``tracestate`` from a JSON string before validation.
+
+        This prevents ``additionalProperties: false`` schemas from rejecting
+        payloads that carry injected W3C trace context fields.
+        """
+        try:
+            obj = json.loads(decoded)
+            if isinstance(obj, dict):
+                strip_trace_keys(obj)
+                return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        return decoded
 
     @staticmethod
     def _serialize_message(obj) -> bytes:

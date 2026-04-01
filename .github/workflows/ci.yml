@@ -47,4 +47,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create dummy .env for compose variable resolution
+        run: |
+          cat <<'EOF' > .env
+          POSTGRES_DB=rtls
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=postgres
+          POSTGRES_PORT=5432
+          API_HOST=0.0.0.0
+          API_PORT=8000
+          DATABASE_DSN=postgresql://postgres:postgres@postgres:5432/rtls
+          RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+          EOF
       - run: docker compose build

@@ -12,11 +12,11 @@ exporters:
     tls:
       insecure: true
 
-  logging:
-    loglevel: info
+  debug:
+    verbosity: normal
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      exporters: [otlp/tempo, logging]
+      exporters: [otlp/tempo, debug]
