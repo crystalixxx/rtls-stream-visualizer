@@ -7,3 +7,7 @@ scrape_configs:
     metrics_path: "/metrics"
     static_configs:
       - targets: ["backend:8000"]
+  - job_name: "udp-receiver"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["udp-receiver:9100"]

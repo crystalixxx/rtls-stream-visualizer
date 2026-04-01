@@ -201,6 +201,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Load test runtime state
+tests/load/.active_tags.json
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
