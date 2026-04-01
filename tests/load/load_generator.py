@@ -54,6 +54,10 @@ class Stats:
 DEFAULT_TAG_STATE_FILE = Path("tests/load/.active_tags.json")
 
 
+def _generate_hex_id(length: int = 6) -> str:
+    return "".join(random.choices("0123456789ABCDEF", k=length))
+
+
 def _build_tag_pool(
     num_tags: int,
     *,
@@ -152,7 +156,12 @@ def run(
     _persist_tag_pool(tag_state_file, tags)
     stats = Stats()
     stop = threading.Event()
+    worker_errors: list[BaseException] = []
 
+    if rate < 1:
+        raise ValueError(f"--rate must be >= 1, got {rate}")
+    if workers < 1:
+        raise ValueError(f"--workers must be >= 1, got {workers}")
     per_worker_rate = rate / workers
     logger.info(
         "Starting %d worker(s): target %d msg/s total (%d/worker), "
@@ -166,11 +175,19 @@ def run(
         port,
     )
 
+    def _safe_sender(*args: object) -> None:
+        try:
+            _sender_loop(*args)
+        except Exception as exc:
+            worker_errors.append(exc)
+            stop.set()
+            logger.error("Worker thread crashed: %s", exc)
+
     threads: list[threading.Thread] = []
     t0 = time.monotonic()
     for _ in range(workers):
         t = threading.Thread(
-            target=_sender_loop,
+            target=_safe_sender,
             args=(host, port, per_worker_rate, duration, tags, stats, stop),
             daemon=True,
         )
@@ -185,6 +202,18 @@ def run(
         stop.set()
         for t in threads:
             t.join(timeout=3)
+
+    failed = [t for t in threads if t.is_alive()]
+    if failed:
+        logger.error("%d worker thread(s) still alive after join", len(failed))
+
+    if worker_errors:
+        logger.error(
+            "%d worker thread(s) crashed; first error: %s",
+            len(worker_errors),
+            worker_errors[0],
+        )
+        raise worker_errors[0]
 
     elapsed = time.monotonic() - t0
     actual_rate = stats.sent / elapsed if elapsed > 0 else 0

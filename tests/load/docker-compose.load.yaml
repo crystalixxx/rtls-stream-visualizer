@@ -33,7 +33,9 @@ services:
 
   # ---------- Locust load generator ----------
   locust:
-    image: locustio/locust:2.34.1
+    build:
+      context: .
+      dockerfile: tests/load/Dockerfile.locust
     container_name: rtls-locust
     depends_on:
       backend:

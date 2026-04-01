@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -20,8 +22,10 @@ def _config() -> BackendConfig:
 
 
 def test_health_returns_200_when_database_is_available(monkeypatch):
-    monkeypatch.setattr("backend.api.health.probe_database", lambda config: True)
-    client = TestClient(create_app(_config()))
+    monkeypatch.setattr("backend.api.health.probe_database", lambda pool: True)
+    app = create_app(_config())
+    app.state.pool = MagicMock()
+    client = TestClient(app)
 
     response = client.get("/health")
 
@@ -30,8 +34,10 @@ def test_health_returns_200_when_database_is_available(monkeypatch):
 
 
 def test_health_returns_503_when_database_is_unavailable(monkeypatch):
-    monkeypatch.setattr("backend.api.health.probe_database", lambda config: False)
-    client = TestClient(create_app(_config()))
+    monkeypatch.setattr("backend.api.health.probe_database", lambda pool: False)
+    app = create_app(_config())
+    app.state.pool = MagicMock()
+    client = TestClient(app)
 
     response = client.get("/health")
 
@@ -40,11 +46,13 @@ def test_health_returns_503_when_database_is_unavailable(monkeypatch):
 
 
 def test_health_returns_503_when_database_probe_raises(monkeypatch):
-    def _raise(_config):
+    def _raise(_pool):
         raise RuntimeError("db down")
 
     monkeypatch.setattr("backend.api.health.probe_database", _raise)
-    client = TestClient(create_app(_config()))
+    app = create_app(_config())
+    app.state.pool = MagicMock()
+    client = TestClient(app)
 
     response = client.get("/health")
 

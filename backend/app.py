@@ -11,13 +11,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import context as otel_context, trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
+from psycopg_pool import ConnectionPool
+
 from backend.api.health import router as health_router
 from backend.api.metrics import router as metrics_router
 from backend.api.positions import router as positions_router
 from backend.api.ws import router as ws_router
 from backend.broadcast import Broadcast
 from backend.config import BackendConfig, load_backend_config
-from backend.db import get_connection
+from backend.db import create_pool, get_connection
 from backend.metrics import (
     CONSUMER_MESSAGES_FAILED,
     CONSUMER_MESSAGES_PROCESSED,
@@ -36,7 +38,7 @@ _tracer = trace.get_tracer(__name__)
 
 async def _on_message(
     message: aio_pika.abc.AbstractIncomingMessage,
-    config: BackendConfig,
+    pool: ConnectionPool,
     broadcast: Broadcast,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
@@ -66,7 +68,7 @@ async def _on_message(
                     with _tracer.start_as_current_span("db_write"):
                         t0 = _time.monotonic()
                         await loop.run_in_executor(
-                            None, partial(_write_to_db, config, envelope)
+                            None, partial(_write_to_db, pool, envelope)
                         )
                         DB_WRITE_LATENCY.observe(_time.monotonic() - t0)
                 except Exception:
@@ -84,13 +86,14 @@ async def _on_message(
             otel_context.detach(token)
 
 
-def _write_to_db(config: BackendConfig, envelope: dict) -> None:
-    with get_connection(config) as connection:
+def _write_to_db(pool: ConnectionPool, envelope: dict) -> None:
+    with get_connection(pool) as connection:
         persist_envelope(connection, envelope)
 
 
 async def _run_consumer(
     config: BackendConfig,
+    pool: ConnectionPool,
     broadcast: Broadcast,
     stop_event: asyncio.Event,
 ) -> None:
@@ -117,9 +120,7 @@ async def _run_consumer(
             queue = await channel.declare_queue(config.rabbitmq.queue, durable=True)
             await queue.bind(exchange, routing_key=config.rabbitmq.routing_key)
 
-            callback = partial(
-                _on_message, config=config, broadcast=broadcast, loop=loop
-            )
+            callback = partial(_on_message, pool=pool, broadcast=broadcast, loop=loop)
             await queue.consume(callback)
 
             logger.info(
@@ -155,16 +156,23 @@ async def _lifespan(app: FastAPI):
     config: BackendConfig = app.state.config
     init_tracing("backend", get_otlp_endpoint())
 
+    pool = create_pool(config)
+    app.state.pool = pool
+
     broadcast = Broadcast()
     app.state.broadcast = broadcast
 
     stop_event = asyncio.Event()
-    consumer_task = asyncio.create_task(_run_consumer(config, broadcast, stop_event))
+    consumer_task = asyncio.create_task(
+        _run_consumer(config, pool, broadcast, stop_event)
+    )
 
     yield
 
     stop_event.set()
     await consumer_task
+    pool.close()
+    logger.info("Connection pool closed")
 
 
 def create_app(config: BackendConfig | None = None) -> FastAPI:

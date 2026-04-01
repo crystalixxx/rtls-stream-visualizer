@@ -181,6 +181,23 @@ poetry run pytest -v
 cd frontend && npm test
 ```
 
+## Производительность
+
+Результаты нагрузочного тестирования при пиковом профиле (500 UDP msg/s, 30 тегов, 70 Locust-пользователей, 180 секунд).
+
+| Метрика | Значение |
+|---------|----------|
+| UDP throughput | 500 msg/s, 0 errors |
+| HTTP requests / failures | 9 543 / 0 (0%) |
+| HTTP p50 | 96ms |
+| HTTP p95 | 180ms |
+| HTTP p99 | 240ms |
+| HTTP p99.9 | 320ms |
+| WebSocket connections | 35, 0 failures |
+| WS messages delivered | 4 952 |
+| WS recv latency p50 | < 1ms |
+| REST throughput | ~108 req/s |
+
 ## База данных
 
 - **`position_events`** — история всех событий (BIGSERIAL PK, индексы по `tag_id + ts_utc_ms DESC`)

@@ -4,23 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.config import BackendConfig
-from core.config import BackendApiConfig, DatabaseConfig, RabbitMQConfig
 from backend.consumer import on_message
 
 
-def _config() -> BackendConfig:
-    return BackendConfig(
-        api=BackendApiConfig(host="127.0.0.1", port=8000),
-        database=DatabaseConfig(dsn="postgresql://test:test@localhost:5432/test"),
-        rabbitmq=RabbitMQConfig(
-            url="amqp://guest:guest@localhost:5672/",
-            exchange="rtls",
-            exchange_type="topic",
-            queue="rtls.events",
-            routing_key="rtls.events",
-        ),
-    )
+def _make_pool():
+    return MagicMock()
 
 
 def _make_envelope_bytes(**overrides) -> bytes:
@@ -76,8 +64,9 @@ class TestOnMessage:
         body = _make_envelope_bytes()
         message = _make_message(body)
         loop = asyncio.get_event_loop()
+        pool = _make_pool()
 
-        await on_message(message, config=_config(), loop=loop)
+        await on_message(message, pool=pool, loop=loop)
 
         mock_persist.assert_called_once()
         call_args = mock_persist.call_args
@@ -89,8 +78,9 @@ class TestOnMessage:
     async def test_malformed_json_does_not_raise(self):
         message = _make_message(b"not-json{{{")
         loop = asyncio.get_event_loop()
+        pool = _make_pool()
 
-        await on_message(message, config=_config(), loop=loop)
+        await on_message(message, pool=pool, loop=loop)
 
     @pytest.mark.asyncio
     async def test_missing_tag_id_does_not_raise(self):
@@ -104,8 +94,9 @@ class TestOnMessage:
         }
         message = _make_message(json.dumps(envelope).encode())
         loop = asyncio.get_event_loop()
+        pool = _make_pool()
 
-        await on_message(message, config=_config(), loop=loop)
+        await on_message(message, pool=pool, loop=loop)
 
     @pytest.mark.asyncio
     @patch("backend.consumer.get_connection")
@@ -118,6 +109,7 @@ class TestOnMessage:
         body = _make_envelope_bytes()
         message = _make_message(body)
         loop = asyncio.get_event_loop()
+        pool = _make_pool()
 
         with pytest.raises(RuntimeError, match="db down"):
-            await on_message(message, config=_config(), loop=loop)
+            await on_message(message, pool=pool, loop=loop)

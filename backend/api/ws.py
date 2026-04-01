@@ -2,9 +2,9 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from psycopg_pool import ConnectionPool
 
 from backend.broadcast import Broadcast
-from backend.config import BackendConfig
 from backend.db import get_connection
 from backend.metrics import WS_ACTIVE_CONNECTIONS
 from backend.repository import get_all_current_positions
@@ -13,8 +13,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _snapshot(config: BackendConfig) -> list[dict]:
-    with get_connection(config) as conn:
+def _snapshot(pool: ConnectionPool) -> list[dict]:
+    with get_connection(pool) as conn:
         return get_all_current_positions(conn)
 
 
@@ -35,7 +35,7 @@ def _is_stale(envelope: dict, snapshot_ts: dict[str, int]) -> bool:
 
 @router.websocket("/ws/positions")
 async def positions_ws(websocket: WebSocket) -> None:
-    config: BackendConfig = websocket.app.state.config
+    pool: ConnectionPool = websocket.app.state.pool
     broadcast: Broadcast = websocket.app.state.broadcast
 
     await websocket.accept()
@@ -44,7 +44,7 @@ async def positions_ws(websocket: WebSocket) -> None:
     queue = broadcast.subscribe()
     try:
         loop = asyncio.get_running_loop()
-        snapshot = await loop.run_in_executor(None, _snapshot, config)
+        snapshot = await loop.run_in_executor(None, _snapshot, pool)
         await websocket.send_json(snapshot)
 
         ts_map = _snapshot_timestamps(snapshot)

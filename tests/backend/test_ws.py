@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -28,6 +28,7 @@ def _config() -> BackendConfig:
 def _make_app(broadcast: Broadcast | None = None) -> FastAPI:
     app = FastAPI()
     app.state.config = _config()
+    app.state.pool = MagicMock()
     app.state.broadcast = broadcast or Broadcast()
     app.include_router(ws_router, prefix="/api/v1")
     return app

@@ -2,21 +2,21 @@ import logging
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
+from psycopg_pool import ConnectionPool
 
-from backend.config import BackendConfig
 from backend.db import probe_database
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def get_backend_config(request: Request) -> BackendConfig:
-    return request.app.state.config
+def _get_pool(request: Request) -> ConnectionPool:
+    return request.app.state.pool
 
 
-def build_health_response(config: BackendConfig) -> JSONResponse:
+def build_health_response(pool: ConnectionPool) -> JSONResponse:
     try:
-        database_ok = probe_database(config)
+        database_ok = probe_database(pool)
     except Exception as exc:
         logger.error("Database health probe failed: %s", exc)
         database_ok = False
@@ -34,5 +34,5 @@ def build_health_response(config: BackendConfig) -> JSONResponse:
 
 
 @router.get("/health")
-def health_check(config: BackendConfig = Depends(get_backend_config)) -> JSONResponse:
-    return build_health_response(config)
+def health_check(pool: ConnectionPool = Depends(_get_pool)) -> JSONResponse:
+    return build_health_response(pool)

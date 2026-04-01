@@ -1,9 +1,9 @@
 import logging
 
 from fastapi import APIRouter, Depends, Query, Request
+from psycopg_pool import ConnectionPool
 
 from backend.api.schemas import PositionHistoryResponse, PositionOut
-from backend.config import BackendConfig
 from backend.db import get_connection
 from backend.repository import count_position_history, get_position_history
 
@@ -11,8 +11,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _get_config(request: Request) -> BackendConfig:
-    return request.app.state.config
+def _get_pool(request: Request) -> ConnectionPool:
+    return request.app.state.pool
 
 
 @router.get("/positions/history", response_model=PositionHistoryResponse)
@@ -22,9 +22,9 @@ def position_history(
     to_ts: int | None = Query(None, description="End timestamp (ms UTC)"),
     limit: int = Query(100, ge=1, le=1000, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
-    config: BackendConfig = Depends(_get_config),
+    pool: ConnectionPool = Depends(_get_pool),
 ) -> PositionHistoryResponse:
-    with get_connection(config) as conn:
+    with get_connection(pool) as conn:
         rows = get_position_history(conn, tag_id, from_ts, to_ts, limit, offset)
         total = count_position_history(conn, tag_id, from_ts, to_ts)
 
