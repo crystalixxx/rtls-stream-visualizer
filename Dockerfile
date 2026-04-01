@@ -19,7 +19,7 @@ COPY stream_generator ./stream_generator
 COPY stream_handler ./stream_handler
 COPY udp_receiver ./udp_receiver
 
-RUN poetry install --only main
+RUN poetry install --only main && pip install --no-cache-dir psycopg2-binary websockets
 
 EXPOSE ${API_PORT:-8000}
 

@@ -1,5 +1,5 @@
-from backend.config import BackendConfig, ApiConfig, DatabaseConfig
-from core.config import RabbitMQConfig
+from unittest.mock import MagicMock, patch
+
 from backend.db import get_connection, probe_database
 
 
@@ -23,52 +23,46 @@ class DummyCursor:
 
 class DummyConnection:
     def __init__(self, result=(1,)):
-        self.closed = False
         self.cursor_instance = DummyCursor(result=result)
 
     def cursor(self):
         return self.cursor_instance
 
-    def close(self):
-        self.closed = True
+
+def _make_pool(conn):
+    """Create a mock pool that yields the given connection."""
+    pool = MagicMock()
+    ctx = MagicMock()
+    ctx.__enter__ = MagicMock(return_value=conn)
+    ctx.__exit__ = MagicMock(return_value=False)
+    pool.connection.return_value = ctx
+    return pool
 
 
-def _config() -> BackendConfig:
-    return BackendConfig(
-        api=ApiConfig(host="127.0.0.1", port=8000),
-        database=DatabaseConfig(dsn="postgresql://postgres:postgres@localhost:5432/db"),
-        rabbitmq=RabbitMQConfig(
-            url="amqp://guest:guest@localhost:5672/",
-            exchange="rtls",
-            exchange_type="topic",
-            queue="rtls.events",
-            routing_key="rtls.events",
-        ),
-    )
+def test_get_connection_returns_connection_from_pool():
+    conn = DummyConnection()
+    pool = _make_pool(conn)
 
+    with get_connection(pool) as current:
+        assert current is conn
 
-def test_get_connection_closes_connection():
-    connection = DummyConnection()
-
-    with get_connection(_config(), connection_factory=lambda _: connection) as current:
-        assert current is connection
-        assert connection.closed is False
-
-    assert connection.closed is True
+    pool.connection.assert_called_once()
 
 
 def test_probe_database_returns_true_for_successful_probe():
-    connection = DummyConnection(result=(1,))
+    conn = DummyConnection(result=(1,))
+    pool = _make_pool(conn)
 
-    result = probe_database(_config(), connection_factory=lambda _: connection)
+    result = probe_database(pool)
 
     assert result is True
-    assert connection.cursor_instance.executed == ["SELECT 1"]
+    assert conn.cursor_instance.executed == ["SELECT 1"]
 
 
 def test_probe_database_returns_false_for_unexpected_result():
-    connection = DummyConnection(result=(0,))
+    conn = DummyConnection(result=(0,))
+    pool = _make_pool(conn)
 
-    result = probe_database(_config(), connection_factory=lambda _: connection)
+    result = probe_database(pool)
 
     assert result is False

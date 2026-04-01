@@ -1,0 +1,72 @@
+# docker compose override for load testing.
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f tests/load/docker-compose.load.yaml up -d
+#
+# Adds:
+#   - udp_receiver  -- ingests UDP datagrams and publishes to RabbitMQ
+#   - locust        -- HTTP / WebSocket load generator with web UI on :8089
+#
+# Overrides:
+#   - backend       -- bumps resource limits for stress testing
+
+services:
+  # ---------- UDP receiver (not in the base compose) ----------
+  udp-receiver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rtls-udp-receiver
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      LOG_FORMAT: "json"
+      PROMETHEUS_METRICS_PORT: "9100"
+    command: ["python", "-m", "udp_receiver.main"]
+    ports:
+      - "${UDP_PORT:-9999}:9999/udp"
+    expose:
+      - "9100"
+
+  # ---------- Locust load generator ----------
+  locust:
+    build:
+      context: .
+      dockerfile: tests/load/Dockerfile.locust
+    container_name: rtls-locust
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./tests/load:/mnt/locust
+    environment:
+      BACKEND_HOST: "backend:8000"
+      LOAD_TAG_STATE_FILE: "/mnt/locust/.active_tags.json"
+    command: >
+      -f /mnt/locust/locustfile.py
+      --host http://backend:8000
+      --web-host 0.0.0.0
+    ports:
+      - "${LOCUST_PORT:-8089}:8089"
+
+  # ---------- Backend: raise resource limits ----------
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+
+  # ---------- Postgres: raise shared_buffers for load ----------
+  postgres:
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c max_connections=200
+        -c work_mem=8MB

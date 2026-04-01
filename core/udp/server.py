@@ -189,7 +189,7 @@ class UdpServer:
         return builder.build(payload, context)
 
     def _publish_message(self, message: bytes, headers: dict[str, str]) -> None:
-        logger.info(
+        logger.debug(
             "Sending into %s message_len=%s message_type=%s headers=%s",
             self.topic,
             len(message),

@@ -5,9 +5,10 @@ import signal
 from functools import partial
 
 import aio_pika
+from psycopg_pool import ConnectionPool
 
 from backend.config import load_backend_config, BackendConfig
-from backend.db import get_connection
+from backend.db import create_pool, get_connection
 from backend.repository import persist_envelope
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 async def on_message(
     message: aio_pika.abc.AbstractIncomingMessage,
-    config: BackendConfig,
+    pool: ConnectionPool,
     loop: asyncio.AbstractEventLoop,
 ) -> None:
     async with message.process(requeue=True):
@@ -32,14 +33,14 @@ async def on_message(
             return
 
         try:
-            await loop.run_in_executor(None, partial(_write_to_db, config, envelope))
+            await loop.run_in_executor(None, partial(_write_to_db, pool, envelope))
         except Exception:
             logger.exception("DB write failed for tag_id=%s", payload.get("tag_id"))
             raise
 
 
-def _write_to_db(config: BackendConfig, envelope: dict) -> None:
-    with get_connection(config) as connection:
+def _write_to_db(pool: ConnectionPool, envelope: dict) -> None:
+    with get_connection(pool) as connection:
         persist_envelope(connection, envelope)
 
 
@@ -50,6 +51,7 @@ async def main() -> None:
     )
 
     config = load_backend_config()
+    pool = create_pool(config)
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
@@ -70,7 +72,7 @@ async def main() -> None:
         queue = await channel.declare_queue(config.rabbitmq.queue, durable=True)
         await queue.bind(exchange, routing_key=config.rabbitmq.routing_key)
 
-        callback = partial(on_message, config=config, loop=loop)
+        callback = partial(on_message, pool=pool, loop=loop)
         await queue.consume(callback)
 
         logger.info(
@@ -82,6 +84,7 @@ async def main() -> None:
 
         await stop_event.wait()
 
+    pool.close()
     logger.info("Consumer shut down")
 
 

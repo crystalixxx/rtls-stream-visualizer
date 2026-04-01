@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -20,8 +22,10 @@ def _config() -> BackendConfig:
 
 
 def test_metrics_returns_200(monkeypatch):
-    monkeypatch.setattr("backend.api.health.probe_database", lambda config: True)
-    client = TestClient(create_app(_config()))
+    monkeypatch.setattr("backend.api.health.probe_database", lambda pool: True)
+    app = create_app(_config())
+    app.state.pool = MagicMock()
+    client = TestClient(app)
 
     response = client.get("/metrics")
 
@@ -30,8 +34,10 @@ def test_metrics_returns_200(monkeypatch):
 
 
 def test_metrics_contains_expected_counters(monkeypatch):
-    monkeypatch.setattr("backend.api.health.probe_database", lambda config: True)
-    client = TestClient(create_app(_config()))
+    monkeypatch.setattr("backend.api.health.probe_database", lambda pool: True)
+    app = create_app(_config())
+    app.state.pool = MagicMock()
+    client = TestClient(app)
 
     response = client.get("/metrics")
     body = response.text

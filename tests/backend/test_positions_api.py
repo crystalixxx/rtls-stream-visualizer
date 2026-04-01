@@ -25,6 +25,7 @@ def _config() -> BackendConfig:
 def _make_app() -> FastAPI:
     app = FastAPI()
     app.state.config = _config()
+    app.state.pool = MagicMock()
     app.include_router(positions_router, prefix="/api/v1")
     return app
 

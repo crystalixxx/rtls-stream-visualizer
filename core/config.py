@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Dict, List, Any, TypeVar, Mapping, cast
@@ -158,12 +159,13 @@ def _build_broker_config(raw_config: Dict[str, Any]) -> BrokerConfig:
 
 
 def _build_rabbitmq_config(raw_config: Dict[str, Any]) -> RabbitMQConfig:
+    url_from_file = _get_or_use_default(
+        raw_config,
+        ["rabbitmq", "url"],
+        "amqp://guest:guest@localhost:5672/",
+    )
     return RabbitMQConfig(
-        url=_get_or_use_default(
-            raw_config,
-            ["rabbitmq", "url"],
-            "amqp://guest:guest@localhost:5672/",
-        ),
+        url=os.getenv("RABBITMQ_URL", url_from_file),
         exchange=_get_or_use_default(raw_config, ["rabbitmq", "exchange"], "rtls"),
         exchange_type=_get_or_use_default(
             raw_config, ["rabbitmq", "exchange_type"], "topic"
