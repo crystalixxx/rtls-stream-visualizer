@@ -107,12 +107,13 @@ class TestUdpServer:
         assert payload["x"] is None
         assert payload["y"] is None
 
-        assert headers == {
+        expected = {
             "source_ip": source_ip,
             "source_port": str(source_port),
             "origin": "test-origin",
             "parser": "json-normalizer",
         }
+        assert expected.items() <= headers.items()
 
     def test_on_decode_error_called_and_message_skipped(self, static_file):
         publisher = DoomyPublisher()
@@ -175,12 +176,13 @@ class TestUdpServer:
         assert payload["y"] == 3.27
         assert payload["z"] == 1.5
 
-        assert headers == {
+        expected = {
             "source_ip": source_ip,
             "source_port": str(source_port),
             "origin": "ls-1000",
             "parser": "ls1000",
         }
+        assert expected.items() <= headers.items()
 
     def test_ls1000_parser_falls_back_to_schema_validator(self, static_file):
         publisher = DoomyPublisher()
@@ -220,9 +222,10 @@ class TestUdpServer:
         assert payload["source_type"] == "json"
         assert payload["tag_id"] == "1"
         assert isinstance(payload["ts_utc_ms"], int)
-        assert headers == {
+        expected = {
             "source_ip": source_ip,
             "source_port": str(source_port),
             "origin": "test-origin",
             "parser": "json-normalizer",
         }
+        assert expected.items() <= headers.items()

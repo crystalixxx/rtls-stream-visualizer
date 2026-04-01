@@ -2,6 +2,7 @@ import logging
 
 from core.broker.rabbitmq import RabbitMQPublisher
 from core.config import get_config
+from core.tracing import get_otlp_endpoint, init_tracing
 from core.udp.server import UdpServer
 from core.validate import Validator
 from stream_handler import LS1000Parser, JsonStreamNormalizer
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def start_udp():
     config = get_config()
+    init_tracing("udp-receiver", get_otlp_endpoint())
 
     publisher = RabbitMQPublisher(config.rabbitmq)
     validator = Validator(config.validation.schema_path, config.validation.origin)

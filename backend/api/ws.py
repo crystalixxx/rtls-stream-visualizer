@@ -6,6 +6,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from backend.broadcast import Broadcast
 from backend.config import BackendConfig
 from backend.db import get_connection
+from backend.metrics import WS_ACTIVE_CONNECTIONS
 from backend.repository import get_all_current_positions
 
 router = APIRouter()
@@ -38,6 +39,7 @@ async def positions_ws(websocket: WebSocket) -> None:
     broadcast: Broadcast = websocket.app.state.broadcast
 
     await websocket.accept()
+    WS_ACTIVE_CONNECTIONS.inc()
 
     queue = broadcast.subscribe()
     try:
@@ -56,3 +58,4 @@ async def positions_ws(websocket: WebSocket) -> None:
         logger.debug("WebSocket client disconnected")
     finally:
         broadcast.unsubscribe(queue)
+        WS_ACTIVE_CONNECTIONS.dec()
